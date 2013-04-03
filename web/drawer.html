@@ -1,0 +1,90 @@
+<html>
+<head>
+    <script type="text/javascript" src="socket.io.min.js"></script>
+    <script type="text/javascript" src="raphael.js"></script>
+    <style type="text/css">
+        svg {
+            border: 1px solid black;
+        }
+    </style>
+</head>
+<body>
+
+<div id="drawingCanvas"></div>
+
+<script type="text/javascript">
+    var socket = io.connect('http://localhost:80');
+
+    socket.on('connect', function () {
+        var R = createDrawingCanvas(socket);
+
+        var lineFromOtherCanvas = null;
+        var connectionTimeLogger = new ConnectionTimeLogger();
+        socket.on('drawingStartedOnOtherCanvas', function (startCoordinates) {
+            lineFromOtherCanvas = createLine(R, startCoordinates.coordinates);
+            connectionTimeLogger.log(new Date(startCoordinates.time));
+        });
+
+        socket.on('lineSegmentDrawnOnOtherCanvas', function (segmentEndCoordinates) {
+            extendLine(lineFromOtherCanvas, segmentEndCoordinates.coordinates);
+            connectionTimeLogger.log(new Date(segmentEndCoordinates.time));
+        })
+
+    });
+
+    function ConnectionTimeLogger() {
+        this.totalResponseTimes = 0;
+        this.numberOfResponses = 0;
+
+        this.log = function(time) {
+            var responseTime = new Date().getTime() - time.getTime();
+            this.totalResponseTimes += responseTime;
+            this.numberOfResponses++;
+            console.log("Request took " + responseTime + "ms");
+            console.log("Average:" + this.average() + "ms");
+        }
+
+        this.average = function() {
+            return Math.floor(this.totalResponseTimes / this.numberOfResponses);
+        }
+    }
+
+    function createLine(R, startCoordinates) {
+        var line = R.path(startCoordinates);
+        line.attr({'stroke-width': 4});
+        return line;
+    }
+
+    function extendLine(line, segmentEndCoordinates) {
+        var path = line.attr('path');
+        path += segmentEndCoordinates;
+        line.attr({'path': path});
+    }
+
+    function createDrawingCanvas(socket) {
+        var R = Raphael("drawingCanvas", 500, 500);
+        var background = R.rect(0, 0, 500, 500);
+        background.attr({'fill': 'white', 'opacity': 0});
+
+        var currentLine = null;
+        background.mousedown(function (e) {
+            var startCoordinates = "M" + e.offsetX + "," + e.offsetY;
+            currentLine = createLine(R, startCoordinates);
+            currentLine.toBack();
+            socket.emit('drawingStarted', { 'coordinates': startCoordinates, time: new Date() });
+        })
+        background.mousemove(function (e) {
+            if (currentLine) {
+                var segmentEndCoordinates = "L" + e.offsetX + "," + e.offsetY;
+                extendLine(currentLine, segmentEndCoordinates);
+                socket.emit('lineSegmentDrawn', { 'coordinates': segmentEndCoordinates, time: new Date() });
+            }
+        })
+        background.mouseup(function (e) {
+            currentLine = null;
+        })
+        return R;
+    }
+</script>
+</body>
+</html>
