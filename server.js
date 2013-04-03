@@ -1,17 +1,12 @@
 var http = require('http');
 var fs = require('fs');
 var net = require('net');
+var static = require('node-static');
+
+var staticServer = new static.Server('./web');
 
 http.createServer(function(request, response) {
-    fs.readFile("web/" + request.url, function(error, content) {
-        if(error) {
-            response.writeHead(500);
-            response.end(error.toString());
-        } else {
-            response.writeHead(200, { 'Content-Type': 'text/html' });
-            response.end(content);
-        }
-    });
+    staticServer.serve(request, response);
 }).listen(9090);
 
 net.createServer(function(socket) {
@@ -30,4 +25,4 @@ io.sockets.on('connection', function(socket) {
     })
 });
 
-console.log('kben er');
+console.log('hier fsdfd ben ik');
